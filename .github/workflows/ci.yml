@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-and-test:
+    name: Build & smoke test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y gcc make libssl-dev binutils file
+
+      - name: Build
+        run: make
+
+      - name: Smoke tests
+        run: bash tests/smoke_test.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tls12_cap.so
+          path: tls12_cap.so

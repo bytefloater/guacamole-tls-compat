@@ -1,0 +1,30 @@
+# Build artifacts
+*.so
+*.o
+*.a
+
+# Test temporaries
+/tmp/
+
+# Editor — Vim
+*.swp
+*.swo
+*~
+
+# Editor — Emacs
+\#*\#
+.\#*
+
+# Editor — VS Code
+.vscode/
+
+# Editor — JetBrains
+.idea/
+
+# OS — macOS
+.DS_Store
+.AppleDouble
+
+# OS — Windows
+Thumbs.db
+Desktop.ini

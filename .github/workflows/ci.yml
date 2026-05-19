@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6.0.2
 
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y gcc make libssl-dev binutils file
@@ -23,7 +23,7 @@ jobs:
         run: bash tests/smoke_test.sh
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: tls12_cap.so
           path: tls12_cap.so

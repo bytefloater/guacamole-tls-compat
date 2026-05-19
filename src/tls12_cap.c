@@ -62,13 +62,19 @@ static void parse_entry(char *line)
     struct in6_addr a6;
 
     if (inet_pton(AF_INET, line, &a4) == 1) {
-        if (n4 >= MAX_ENTRIES) return;
+        if (n4 >= MAX_ENTRIES) {
+            syslog(LOG_WARNING, "tls12_cap: MAX_ENTRIES (%d) reached, ignoring remaining IPv4 entries", MAX_ENTRIES);
+            return;
+        }
         int p = (prefix < 0 || prefix > 32) ? 32 : prefix;
         entries4[n4].mask = prefix_mask4(p);
         entries4[n4].net  = a4.s_addr & entries4[n4].mask;
         n4++;
     } else if (inet_pton(AF_INET6, line, &a6) == 1) {
-        if (n6 >= MAX_ENTRIES) return;
+        if (n6 >= MAX_ENTRIES) {
+            syslog(LOG_WARNING, "tls12_cap: MAX_ENTRIES (%d) reached, ignoring remaining IPv6 entries", MAX_ENTRIES);
+            return;
+        }
         int p = (prefix < 0 || prefix > 128) ? 128 : prefix;
         prefix_mask6(p, entries6[n6].mask);
         for (int i = 0; i < 16; i++)
@@ -98,6 +104,9 @@ static void load_config(void)
                n4, n6, CONF_PATH);
 }
 
+/* IPv4-mapped IPv6 prefix: ::ffff:0:0/96 */
+static const uint8_t v4mapped_pfx[12] = {0,0,0,0, 0,0,0,0, 0,0,0xff,0xff};
+
 static int peer_ip_is_targeted(int fd, char *addrstr, size_t addrlen)
 {
     struct sockaddr_storage ss;
@@ -118,6 +127,17 @@ static int peer_ip_is_targeted(int fd, char *addrstr, size_t addrlen)
 
     } else if (ss.ss_family == AF_INET6) {
         uint8_t *addr = ((struct sockaddr_in6 *)&ss)->sin6_addr.s6_addr;
+
+        /* IPv4-mapped IPv6 (::ffff:x.x.x.x) — check against IPv4 table */
+        if (memcmp(addr, v4mapped_pfx, 12) == 0) {
+            uint32_t v4addr;
+            memcpy(&v4addr, addr + 12, 4);
+            if (addrstr) inet_ntop(AF_INET, &v4addr, addrstr, (socklen_t)addrlen);
+            for (int i = 0; i < n4; i++)
+                if ((v4addr & entries4[i].mask) == entries4[i].net) return 1;
+            return 0;
+        }
+
         if (addrstr) inet_ntop(AF_INET6, addr, addrstr, (socklen_t)addrlen);
         for (int i = 0; i < n6; i++) {
             int match = 1;
@@ -161,6 +181,10 @@ void tls12_SSL_set_bio(SSL *ssl, BIO *rbio, BIO *wbio)
 {
     typedef void (*fn_t)(SSL *, BIO *, BIO *);
     fn_t real = dlsym(RTLD_NEXT, "SSL_set_bio");
+    if (!real) {
+        syslog(LOG_ERR, "tls12_cap: dlsym SSL_set_bio failed -- shim inactive");
+        return;
+    }
     real(ssl, rbio, wbio);
 
     int fd = -1;
@@ -183,6 +207,10 @@ int tls12_SSL_set_fd(SSL *ssl, int fd)
 {
     typedef int (*fn_t)(SSL *, int);
     fn_t real = dlsym(RTLD_NEXT, "SSL_set_fd");
+    if (!real) {
+        syslog(LOG_ERR, "tls12_cap: dlsym SSL_set_fd failed -- shim inactive");
+        return 0;
+    }
     int ret = real(ssl, fd);
 
     if (debug_mode)

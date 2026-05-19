@@ -22,9 +22,9 @@ error() { echo -e "${RED}[x]${NC} $*" >&2; exit 1; }
 
 [[ $EUID -eq 0 ]] || error "Run as root (sudo $0 $*)"
 
-# ════════════════════════════════════════════════════════════════════════════
+# ----------------------------------------------------------------------------
 # UNINSTALL
-# ════════════════════════════════════════════════════════════════════════════
+# ----------------------------------------------------------------------------
 if [[ "${1:-}" == "uninstall" ]]; then
     info "Removing guacd TLS compatibility shim..."
 
@@ -62,12 +62,12 @@ if [[ "${1:-}" == "uninstall" ]]; then
     exit 0
 fi
 
-# ════════════════════════════════════════════════════════════════════════════
+# ----------------------------------------------------------------------------
 # INSTALL
-# ════════════════════════════════════════════════════════════════════════════
+# ----------------------------------------------------------------------------
 info "Installing guacd TLS compatibility shim..."
 
-# ── dependency check ──────────────────────────────────────────────────────
+# -- dependency check ------------------------------------------------------
 missing=()
 command -v gcc  &>/dev/null || missing+=(gcc)
 command -v make &>/dev/null || missing+=(make)
@@ -84,25 +84,25 @@ if [[ ${#missing[@]} -gt 0 ]]; then
     error "Install the above packages and re-run this script."
 fi
 
-# ── build ─────────────────────────────────────────────────────────────────
+# -- build -----------------------------------------------------------------
 info "Building shim..."
 make -C "$SCRIPT_DIR" clean all
 [[ -s "${SCRIPT_DIR}/tls12_cap.so" ]] \
     || error "Build produced an empty or missing library."
 info "Built: tls12_cap.so ($(du -h "${SCRIPT_DIR}/tls12_cap.so" | cut -f1))"
 
-# ── verify versioned symbol ───────────────────────────────────────────────
+# -- verify versioned symbol -----------------------------------------------
 for sym in SSL_set_bio SSL_set_fd; do
     nm -D "${SCRIPT_DIR}/tls12_cap.so" | grep -q "${sym}@@OPENSSL_3.0.0" \
         || error "Versioned symbol ${sym}@@OPENSSL_3.0.0 missing — build problem."
 done
 info "Versioned symbol verified."
 
-# ── install library ───────────────────────────────────────────────────────
+# -- install library -------------------------------------------------------
 install -Dm 755 "${SCRIPT_DIR}/tls12_cap.so" "$SO_PATH"
 info "Installed: $SO_PATH"
 
-# ── host config file ──────────────────────────────────────────────────────
+# -- host config file ------------------------------------------------------
 mkdir -p "$CONF_DIR"
 if [[ ! -f "$CONF_FILE" ]]; then
     cat > "$CONF_FILE" << 'EOF'
@@ -123,7 +123,7 @@ else
     info "Host config already exists: $CONF_FILE (not overwritten)"
 fi
 
-# ── systemd override ──────────────────────────────────────────────────────
+# -- systemd override ------------------------------------------------------
 mkdir -p "$OVERRIDE_DIR"
 cat > "$OVERRIDE_FILE" << EOF
 [Service]
@@ -131,7 +131,7 @@ Environment="LD_PRELOAD=${SO_PATH}"
 EOF
 info "Systemd override written: $OVERRIDE_FILE"
 
-# ── reload & restart ──────────────────────────────────────────────────────
+# -- reload & restart ------------------------------------------------------
 systemctl daemon-reload
 
 if systemctl is-active --quiet guacd 2>/dev/null; then
